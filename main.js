@@ -39,25 +39,32 @@ class Rectangle
 
 // =================== MAIN ====================
 
-const COLUMN = 14;
-const ROW = 6;
 const MAG = 3;
 const MAP_WIDTH = 30;
-const MAP_HEIGHT = 23;
+const MAP_HEIGHT = 22;
 const MESH = 8;
+const RES_IMG = "tile.png";
+const RES_SE = [ "se0.mp3", "se1.mp3", "se2.mp3" ];
 const WIDTH = 240;
-const HEIGHT = 180;
+const HEIGHT = 176;
+
+var gChange;
+var gWait = 61;
+var gMap;
+
+/*
+
+const COLUMN = 14;
+const ROW = 6;
 
 var gBall = [];
 var gCanvas = [];
-var gChange;
 var gHP = new Int8Array( COLUMN * ROW);
 var gImg;
 var gItem = [];
 var gLife = 3;
 var gScore = 0;
 var gStage = 0;
-var gMap;
 var gSE = [];
 var gWait = 61;
 
@@ -231,6 +238,7 @@ class Player extends Rectangle
 }
 
 var gPlayer = new Player();
+*/
 
 function draw()
 {
@@ -247,6 +255,7 @@ function draw()
   let g = gCanvas[ 1 ].getContext( "2d" );
   g.clearRect( 0, 0, WIDTH, HEIGHT );
 
+/*
   if( gWait < 30 ){
     gPlayer.draw( g );
   }
@@ -257,12 +266,12 @@ function draw()
   for( let o of gItem ){
     o.draw( g );
   }
-    
+  */  
   g = document.getElementById("main").getContext("2d");
   g.imageSmoothingEnabled = g.msUmageSmoothEnabled = false;
   g.drawImage( gCanvas[ 0 ], 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH * MAG, HEIGHT * MAG );
   g.drawImage( gCanvas[ 1 ], 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH * MAG, HEIGHT * MAG );
-
+/*
   g.font = "bold " + MESH * MAG + "px monospace";
   g.fillStyle = "#ff2200";
   g.fillText("SCORE", MESH * MAG * 2, MESH * MAG * 1.8 );
@@ -284,15 +293,18 @@ function draw()
   if( gScore == COLUMN * ROW * gStage ) {
     g.fillText("GAME CLEAR!", WIDTH * MAG / 2 - MESH * MAG * 5, HEIGHT * MAG / 2 + MESH * MAG );
   }
+*/
 }
+
 
 function nextStage()
 {
-  gStage++;
+// gStage++;
   gChange = true;
-  Ball.Init();
+// Ball.Init();
 
-  for( let y = 0; y < ROW; y++){
+/*
+   for( let y = 0; y < ROW; y++){
     let v = 1;
     if( !y ){
       v = gStage * 2;
@@ -301,6 +313,7 @@ function nextStage()
       gHP[ y * COLUMN + x ] = v;
     }
   }
+*/
   gMap =[
 		5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6,
 		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
@@ -328,51 +341,28 @@ function nextStage()
 	];
 }
 
-function start()
-{
-  gCanvas[ 0 ] = document.createElement( "canvas" );
-  gCanvas[ 0 ].width = WIDTH;
-  gCanvas[ 0 ].height = HEIGHT;
-
-  gCanvas[ 1 ] = document.createElement( "canvas" );
-  gCanvas[ 1 ].width = WIDTH;
-  gCanvas[ 1 ].height = HEIGHT;
-
-  let s = [ "se1.mp3", "se2.mp3", "se3.mp3" ];
-  for( let i = 0; i < s.length; i++){
-    gSE[ i ] = new Audio();
-    gSE[ i ].volume = 0.1;
-    gSE[ i ].src = s[ i ];;
-  }
-
-  
-  gImg = new Image();
-  gImg.src = "tile.png";
-  gImg.onload = function()
-  {
-    requestAnimationFrame( onPaint );
-  }
-
-}
-
 function tick()
 {
+/*
   if( !gLife ){
     return;
   }
+*/
 
   if( gWait ){
     gWait--;
-    if( gWait == 60) {
+    if( gWait == 60 ) {
       nextStage();
     }
+/*
     if( gWait == 30 ){
       gPlayer.start();
       gBall.push( new Ball() );
     }
+*/
     return;
   }
-
+/*
   gPlayer.tick();
   for( let i = gItem.length - 1; i >= 0; i--){
     let o = gItem[ i ];
@@ -416,15 +406,42 @@ function tick()
       Ball.Init();
     }
   }
+*/
 }
 
 // =================== 03_breakout2 ====================
 
 const TIMER_INTERVAL = 33;
 
+var gCanvas = new Array( 2 );
 var gKey = new Uint8Array( 0x100 );
 var gTimer;
+var gSE = [];
+var gImg;
 
+//起動時のイベント
+function onLoad()
+{
+  for( let i = 0; i < gCanvas.length; i++ ){
+    gCanvas[ i ] = document.createElement( "canvas" );
+    gCanvas[ i ].width = WIDTH;
+    gCanvas[ i ].height = HEIGHT;
+  }
+
+  for( let i = 0; i < RES_SE.length; i++){
+    gSE[ i ] = new Audio();
+    gSE[ i ].volume = 0.1;
+    gSE[ i ].src = RES_SE[ i ];;
+  }
+
+  
+  gImg = new Image();
+  gImg.src = RES_IMG;
+  gImg.onload = function()
+  {
+    requestAnimationFrame( onPaint );
+  }
+}
 
 // 描画イベント
 function onPaint()
@@ -456,5 +473,5 @@ window.onkeyup = function(ev)
 // 起動時のイベント
 window.onload = function()
 {
-  start();
+  onLoad();
 }
