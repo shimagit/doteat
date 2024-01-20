@@ -1,10 +1,10 @@
-"use strict"
+"use strict";
 
 // =================== 02_breakout ====================
 
 class Rectangle
 {
-  constructor( x, y, width, height)
+  constructor( x, y, width, height )
   {
     this.mX = x;
     this.mY = y;
@@ -36,6 +36,71 @@ class Rectangle
     this.mY = value - this.mHeight / 2;
   }
 }
+// =================== 04_doteat ====================
+
+class BG
+{
+  constructor( tile, width, height )
+  {
+    this.mTile = tile;
+    this.mWidth = width;
+    this.mHeight = height;
+  }
+  draw( g )
+  {
+    for( let y = 0; y < this.mHeight; y++ ){
+      for( let x = 0; x < this.mWidth; x++ ){
+        this.mTile.draw( g, this.getName( x, y ), 0, x * this.mTile.mDot, y * this.mTile.mDot );
+      }
+    }
+  }
+
+  getName( x, y )
+  {
+    return( this.mName[ this.index( x, y ) ] );
+  }
+
+  index( x, y )
+  {
+    return( y * this.mWidth + x );
+  }
+
+  setName( x, y, value )
+  {
+    this.mName[ this.index( x, y ) ] = value;
+  }
+}
+
+class Sprite extends Rectangle
+{
+  constructor( tile, clm, row, x = 0, y = 0 )
+  {
+    super( x, y, tile.mDot, tile.mDot );
+    this.mTile = tile;
+    this.mClm = clm;
+    this.mRow = row;
+  }
+
+  draw( g )
+  {
+    this.mTile.draw( g, this.mClm, this.mRow, this.mX, this.mY );
+  }
+
+}
+
+class Tile
+{
+  constructor( img, dot )
+  {
+    this.mImg = img;
+    this.mDot = dot;
+  }
+
+  draw( g, clm, row, x, y )
+  {
+    g.drawImage( this.mImg, clm * this.mDot, row * this.mDot, this.mDot, this.mDot, x, y, this.mDot, this.mDot );
+  }
+}
 
 // =================== MAIN ====================
 
@@ -49,365 +114,336 @@ const WIDTH = 240;
 const HEIGHT = 176;
 
 var gChange;
+var gFailed;
 var gWait = 61;
-var gMap;
-
-/*
-
-const COLUMN = 14;
-const ROW = 6;
-
-var gBall = [];
-var gCanvas = [];
-var gHP = new Int8Array( COLUMN * ROW);
-var gImg;
-var gItem = [];
-var gLife = 3;
-var gScore = 0;
+var gBG;
+var gCount;
+var gEnemy = [];
+var gGameOver;
+var gPlayer;
 var gStage = 0;
-var gSE = [];
-var gWait = 61;
+var gTile;
 
-class Ball extends Rectangle
+class Character extends Sprite
 {
-  static sSpeed = 12;
-  static sPower = 1;
+  static  sCos = [ 1, 0, -1, 0 ];
+  static  sSin = [ 0, 1, 0, -1 ];
 
-  constructor()
+  constructor( tile, clm, row, turn )
   {
-    super( 0, 0, 5, 5 );
-    this.pCX = WIDTH / 2;
-    this.pCY = MESH * 12;
-    this.mDX = Math.random() / 20 - 0.025;;
-    this.mDY = 0.25;
+    super( tile, clm, row );
+    this.mTurn = turn;
   }
 
-  static Init()
+  checkCurve()
   {
-    gBall = [];
-    Ball.sSpeed = 12;
-    Ball.sPower = 1;
+    if( this.mX % MESH || this.mY % MESH ){
+      return;
+    }
+
+    let x = this.mX / MESH;
+    let y = this.mY / MESH;
+
+    if( gBG.getName( x, y ) == 1 ){
+      gBG.setName( x, y, 0 );
+      gChange = true; 
+      this.mScore++;
+      if( this == gPlayer ){
+        gSE[ 0 ].currentTime = 0;
+        gSE[ 0 ].play();
+      }
+      if( !--gCount ){
+        gWait = 180;
+        gFailed = ( gPlayer.mScore <= 56 );
+      }
+    }
+
+    x += Character.sCos[ this.mAngle ];
+    y += Character.sSin[ this.mAngle ];
+    if( gBG.getName( x, y ) != ( this.mAngle & 1 ) + 2 ){
+      return;
+    }
+    this.mAngle += this.mTurn;
+    this.mAngle &= 3;
+    this.mClm &= 4;
+    this.mClm |= this.mAngle;
   }
 
-  draw( g )
+  checkWall()
   {
-    g.drawImage( gImg, ( Ball.sPower + 18 ) * MESH + 1, 1, 5, 5, this.mX, this.mY, 5, 5 );
+    let x0 = Math.floor(   this.mX              / MESH );
+    let x1 = Math.floor( ( this.mX + MESH - 1 ) / MESH );
+    let y0 = Math.floor(   this.mY              / MESH );
+    let y1 = Math.floor( ( this.mY + MESH - 1 ) / MESH );
+    if( gBG.getName( x0, y0 ) < 2 &&
+        gBG.getName( x1, y0 ) < 2 &&
+        gBG.getName( x0, y1 ) < 2 &&
+        gBG.getName( x1, y1 ) < 2 ){
+      return;
+    }
+
+    if( this.mAngle & 1 ){
+      if( gBG.getName( x0, y0 ) >= 2 ||
+          gBG.getName( x0, y1 ) >= 2 ){
+          x0++;
+      }
+      this.mX = x0 * MESH;
+    }else{
+      if( gBG.getName( x0, y0 ) >= 2 ||
+          gBG.getName( x1, y0 ) >= 2 ){
+            y0++;
+          }
+          this.mY = y0 * MESH;
+    }
+  }
+
+  lane()
+  {
+    if( this.mAngle & 1 ){
+      return( Math.abs( WIDTH / 2 - this.pCX ) - 32 );
+    }
+    return( Math.abs( HEIGHT / 2 - this.pCY ) );
   }
 
   move()
   {
-    this.mX += this.mDX;
-    this.mY += this.mDY;
-
-    if( gPlayer.contains( this.pCX, this.pCY ) ){
-      gSE[ 0 ].currentTime = 0;
-      gSE[ 0 ].play();
-      let a = Math.atan2( (this.pCY - gPlayer.pCY ) * gPlayer.mWidth / MESH, this.pCX - gPlayer.pCX );
-      this.mDX = Math.cos( a ) / 4;
-      this.mDY = Math.sin( a ) / 4;
-      this.mDY = Math.min( this.mDY, -0.1 );
-      this.mY = gPlayer.mY - MESH * 0.75;
-      Ball.sSpeed += gStage;
-    }
-
-    if( this.pCX < MESH || this.pCX > WIDTH - MESH ){
-      this.mDX = -this.mDX;
-    }
-
-    if( this.pCY < MESH ){
-      this.mDY = -this.mDY;
-    } 
-
-    let x = Math.floor( ( this.pCX - MESH ) / ( MESH * 2 ) );
-    let y = Math.floor( ( this.pCY - MESH * 3 ) / MESH );
-
-    if( x < 0 || x >= COLUMN ||
-        y < 0 || y >= ROW ){
-          return;
-    }
-
-    let i = y * COLUMN + x;
-    if( gHP[ i ] <= 0){
-      return;
-    }
-    gHP[ i ] -= Ball.sPower;
-    if( gHP[ i ] <= 0 ){
-      let mi = ( y + 3 ) * MAP_WIDTH + x * 2 + 1;
-      let v = 1 + ( y & 1 );
-      gMap[ mi++ ] = v;
-      gMap[ mi   ] = 3 - v;
-      gChange = true;
-      if( ++gScore == COLUMN * ROW * gStage ){
-        gWait = 120;
-      }
-
-      if( Math.random() < 0.25 ){
-        let t = 1;
-        if( Ball.sSpeed >= 16 && Math.random() < 0.3 ){
-          t = 3;
-        }else if( Math.random() < 0.25 ){
-          t = 0;
-        }else if( Ball.sPower == 1 && Math.random() < 0.1 ){
-          t = 2;
-        }else if( Math.random() < 0.05 ){
-          t = 4;
-        }
-        gItem.push( new Item( ( x * 2 + 1.5 ) * MESH, ( y + 3 ) * MESH, t ) );
-      }
-        
-      gSE[ 1 ].currentTime = 0;
-      gSE[ 1 ].play();
-    }else{
-      gSE[ 2 ].currentTime = 0;
-      gSE[ 2 ].play();
-    }
-
-    if( gHP[ i ] < 0){
-      return;
-    }
-    let dx = Math.abs( this.pCX - ( x + 1 ) * MESH * 2 );
-    let dy = Math.abs( this.pCY - ( y + 3.5 ) * MESH );
-    if( dx < dy * 2 ){
-      this.mDY = -this.mDY;
-    }else{
-      this.mDX = -this.mDX;
-    }
+    this.mX += Character.sCos[ this.mAngle ];
+    this.mY += Character.sSin[ this.mAngle ];
+    this.checkCurve();
+    this.checkWall();
   }
 
   tick()
   {
-    for( let i = 0; i < Ball.sSpeed; i++ ){
+    for( let i = 0; i < this.mSpeed; i++ ){
       this.move();
     }
-    return( this.mY < HEIGHT )
-  }
-}
 
-class Item extends Rectangle
-{
-  constructor( x, y , type )
-  {
-    super( x, y, MESH, MESH );
-    this.mType = type;
-  }
-
-  draw( g )
-  {
-    g.drawImage( gImg, ( this.mType + 24 ) * MESH, 0, MESH, MESH, this.mX, this.mY, MESH, MESH );
-  }
-
-  tick()
-  {
-    this.mY++;
-    return( gPlayer.contains( this.pCX, this.pCY ) );
-  }
-}
-
-class Player extends Rectangle
-{
-  constructor()
-  {
-    super( 0, 0, 0, MESH );
-    this.start();
-  }
-
-  draw( g )
-  {
-    let x = this.mX + MESH / 2;
-    g.drawImage( gImg, 21 * MESH, 0, MESH, MESH, x, this.mY,MESH, MESH );
-    x += MESH;
-    for( let i = 0; i < this.mWidth / MESH - 3; i++ ){
-      g.drawImage( gImg, 22 * MESH, 0, MESH, MESH, x, this.mY,MESH, MESH );
-      x += MESH;
+    if( this.mAngle & 1 ){
+      this.mX += this.mDX;
+    }else{
+      this.mY += this.mDY;
     }
-    g.drawImage( gImg, 23 * MESH, 0, MESH, MESH, x, this.mY,MESH, MESH );
+    this.checkCurve();
+    this.checkWall();
+  }
+} 
+
+class Enemy extends Character
+{
+  constructor( tile, no )
+  {
+    super( tile, 6, 1, 1 );
+    this.mDX = 0;
+    this.mDY = 0;
+    this.mNo = no;
   }
 
   start()
   {
-    this.mWidth = MESH * 5;
-    this.pCX = WIDTH / 2;
-    this.pCY = HEIGHT - MESH * 2;
+    this.mX = 13 * MESH;
+    this.mY = 20 * MESH;
+    this.mAngle = 2;
+    this.mClm = 6;
+    this.mScore = 0;
   }
 
   tick()
   {
-    this.mX = Math.max( MESH / 2                       , this.mX - gKey[ 37 ] * MESH );
-    this.mX = Math.min( WIDTH - this.mWidth - MESH / 2 , this.mX + gKey[ 39 ] * MESH );
+    super.tick();
+    
+    this.mSpeed = ( 110 - this.mNo * 10 - gCount ) / 60;
+    this.mDX = 0;
+    this.mDY = 0;
+
+    if( this.mStraight ){
+      this.mStraight--;
+      return;
+    }
+    if( Math.random() < 0.02 ){
+      this.mStraight = 20;
+    }
+
+    let si = Math.sign( gPlayer.lane() - this.lane());
+    if( !si ){
+      return;
+    }
+
+    if( this.mAngle & 1 ){
+      this.mDX = si * Math.sign( this.mX - WIDTH / 2 );
+    }else{
+      this.mDY = si * Math.sign( this.mY - HEIGHT / 2 );
+    }
   }
 }
 
-var gPlayer = new Player();
-*/
+class Player extends Character
+{
+  constructor( tile )
+  {
+    super( tile, 0, 1, -1 );
+  }
+
+  start()
+  {
+    this.mX = 16 * MESH;
+    this.mY = 20 * MESH;
+    this.mAngle = 0;
+    this.mClm = 0;
+    this.mScore = 0;
+  }
+
+  tick()
+  {
+    this.mDX = gKey[ 39 ] - gKey[ 37 ];
+    this.mDY = gKey[ 40 ] - gKey[ 38 ];
+    if( this.mDX | this.mDY ){
+      gSE[ 1 ].play();
+    }
+    this.mSpeed = 1 + ( gKey[ 90 ] | gKey[ 13 ] | gKey[ 32 ] );
+    super.tick();
+  }
+}
 
 function draw()
 {
-  if( gChange){
+  if( gChange ){
     gChange = false;
-    let g = gCanvas[ 0 ].getContext( "2d" );
-    for( let y = 0; y < MAP_HEIGHT; y++ ){
-      for( let x = 0; x < MAP_WIDTH; x++ ){
-        g.drawImage( gImg, gMap[ y * MAP_WIDTH + x ] * MESH, 0, MESH, MESH, x * MESH, y * MESH, MESH, MESH );
-      }
-    }
+    gBG.draw( gCanvas[ 0 ].getContext( "2d" ) );
   }
 
   let g = gCanvas[ 1 ].getContext( "2d" );
   g.clearRect( 0, 0, WIDTH, HEIGHT );
-
-/*
-  if( gWait < 30 ){
-    gPlayer.draw( g );
-  }
   gPlayer.draw( g );
-  for( let o of gBall ){
+  for( let o of gEnemy ){
     o.draw( g );
   }
-  for( let o of gItem ){
-    o.draw( g );
-  }
-  */  
-  g = document.getElementById("main").getContext("2d");
-  g.imageSmoothingEnabled = g.msUmageSmoothEnabled = false;
+
+  g = document.getElementById( "main" ).getContext( "2d" );
+  g.imageSmoothingEnabled = g.msImageSmoothingEnabled = false;
   g.drawImage( gCanvas[ 0 ], 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH * MAG, HEIGHT * MAG );
   g.drawImage( gCanvas[ 1 ], 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH * MAG, HEIGHT * MAG );
-/*
+
   g.font = "bold " + MESH * MAG + "px monospace";
+ 
+  g.fillStyle = "#ffff00";
+  drawBold( g,"PLAYER", MESH * MAG * 15, MESH * MAG * 10 );
+
   g.fillStyle = "#ff2200";
-  g.fillText("SCORE", MESH * MAG * 2, MESH * MAG * 1.8 );
-  g.fillText("SCORE", MESH * MAG * 2 + 1, MESH * MAG * 1.8 );
-  g.fillText("LIFE", MESH * MAG * 13, MESH * MAG * 1.8 );
-  g.fillText("LIFE", MESH * MAG * 13 + 1, MESH * MAG * 1.8 );
-  g.fillText("STAGE", MESH * MAG * 23, MESH * MAG * 1.8 );
-  g.fillText("STAGE", MESH * MAG * 23 + 1, MESH * MAG * 1.8 );
+  drawBold( g,"ENEMY", MESH * MAG * 9, MESH * MAG * 10 );
 
   g.fillStyle = "#ffffff";
-  g.fillText(""+ gScore, MESH * MAG * 6.5, MESH * MAG * 2.8 );
-  g.fillText(""+ gLife, MESH * MAG * 16.5, MESH * MAG * 2.8 );
-  g.fillText(""+ gStage, MESH * MAG * 27.5, MESH * MAG * 2.8 );
+  g.fillText(""+ gPlayer.mScore, MESH * MAG * 15, MESH * MAG * 11 );
+  let es = 0;
+  for( let o of gEnemy ){
+    es += o.mScore;
+  }
+  g.fillText(""+ es, MESH * MAG * 9, MESH * MAG * 11 );
 
-  if( gLife <= 0) {
-    g.fillText("GAME OVER", WIDTH * MAG / 2 - MESH * MAG * 4, HEIGHT * MAG / 2 + MESH * MAG );
+  if( gGameOver ){
+    drawMessage( g, "GAME OVER");
+    return;
   }
-  
-  if( gScore == COLUMN * ROW * gStage ) {
-    g.fillText("GAME CLEAR!", WIDTH * MAG / 2 - MESH * MAG * 5, HEIGHT * MAG / 2 + MESH * MAG );
+
+  if( gWait > 60 ){
+    if( gFailed ){
+      drawMessage( g, "STAGE FAILED");
+    }else{
+      drawMessage( g, "STAGE CLEAR!");
+    }
+  }else if( gWait > 30 ){
+    drawMessage( g, "STAGE " + gStage );
+  }else if( gWait > 0 ){
+      drawMessage( g, "START!!");
   }
-*/
 }
 
+function drawBold( g, str, x, y )
+{
+  g.fillText( str, x    , y );
+  g.fillText( str, x + 1, y );
+}
+
+function drawMessage( g, str )
+{
+  drawBold( g, str, WIDTH * MAG / 2 - g.measureText( str ).width / 2, MESH * MAG * 13 );
+}
 
 function nextStage()
 {
-// gStage++;
-  gChange = true;
-// Ball.Init();
-
-/*
-   for( let y = 0; y < ROW; y++){
-    let v = 1;
-    if( !y ){
-      v = gStage * 2;
-    }
-    for( let x = 0; x < COLUMN; x++ ){
-      gHP[ y * COLUMN + x ] = v;
-    }
+  gCount = 112;
+  if( !gFailed ){
+    gStage++;
   }
-*/
-  gMap =[
-		5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18,17,18, 3,
-		3,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12,11,12, 3,
-		3,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16,15,16, 3,
-		3, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 3,
-		3,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14,13,14, 3,
-		3, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 9,10, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
-		3, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
-		3, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 3,
+
+  gBG.mName = [
+    4,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,5,
+		2,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,2,
+		2,1,4,3,3,3,3,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,3,3,3,3,5,1,2,
+		2,0,2,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,2,0,2,
+		2,1,2,1,4,3,3,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,3,3,5,1,2,1,2,
+		2,0,2,0,2,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,2,0,2,0,2,
+		2,1,2,1,2,1,4,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,5,1,2,1,2,1,2,
+		2,0,2,0,2,0,2,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,2,0,2,0,2,0,2,
+		2,1,2,1,2,1,2,1,4,3,3,3,3,3,3,3,3,3,3,3,3,5,1,2,1,2,1,2,1,2,
+		2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,2,
+		2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,2,
+		2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,2,
+		2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,2,
+		2,1,2,1,2,1,2,1,6,3,3,3,3,3,3,3,3,3,3,3,3,7,1,2,1,2,1,2,1,2,
+		2,0,2,0,2,0,2,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,2,0,2,0,2,0,2,
+		2,1,2,1,2,1,6,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,7,1,2,1,2,1,2,
+		2,0,2,0,2,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,2,0,2,0,2,
+		2,1,2,1,6,3,3,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,3,3,7,1,2,1,2,
+		2,0,2,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,2,0,2,
+		2,1,6,3,3,3,3,3,3,3,3,3,3,0,0,0,0,3,3,3,3,3,3,3,3,3,3,7,1,2,
+		2,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,2,
+		6,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,7,
 	];
+  gChange = true;
+
+  gPlayer.start();
+  if( !gFailed ){
+    gEnemy.push( new Enemy( gTile, gEnemy.length ) );
+  }
+  for( let o of gEnemy ){
+    o.start();
+  }
+
 }
 
 function tick()
 {
-/*
-  if( !gLife ){
+  if( gGameOver ){
     return;
   }
-*/
 
   if( gWait ){
     gWait--;
-    if( gWait == 60 ) {
+    if( gWait == 60 ){
       nextStage();
     }
-/*
-    if( gWait == 30 ){
-      gPlayer.start();
-      gBall.push( new Ball() );
-    }
-*/
     return;
   }
-/*
   gPlayer.tick();
-  for( let i = gItem.length - 1; i >= 0; i--){
-    let o = gItem[ i ];
-    if( !o.tick() ){
-      continue;
-    } 
-    gItem.splice( i, 1);
-
-    if( o.mType == 0 ){
-      gPlayer.mWidth += MESH;
-      gPlayer.mX -= MESH / 2;
-    }
-
-    if( o.mType == 1 ){
-      let b = new Ball();
-      b.pCX = o.pCX;
-      b.pCY = gPlayer.mY - MESH;
-      gBall.push( b );
-    }
-
-    if( o.mType == 2 ){
-      Ball.sPower = 2;
-    }
-
-    if( o.mType == 3 ){
-      Ball.sSpeed /= 2;
-    }
-
-    if( o.mType == 4 ){
-      gLife++;
+  for( let o of gEnemy ){
+    o.tick();
+    if( o.contains( gPlayer.pCX, gPlayer.pCY ) ){
+      gGameOver = true;
+      gSE[ 2 ].currentTime = 0;
+      gSE[ 2 ].play();
     }
   }
-  for( let i = gBall.length - 1; i >= 0; i--){ 
-    if( gBall[ i ].tick() ){
-      continue;
-    }
-    gBall.splice( i, 1 );
-    if( !gBall.length ){
-      gWait = 60;
-      gLife--;
-      Ball.Init();
-    }
-  }
-*/
 }
+
+function load()
+{
+  gTile = new Tile( gImg, MESH );
+  gBG = new BG( gTile, MAP_WIDTH, MAP_HEIGHT );
+  gPlayer = new Player( gTile );
+  requestAnimationFrame( onPaint );
+}
+
 
 // =================== 03_breakout2 ====================
 
@@ -428,19 +464,15 @@ function onLoad()
     gCanvas[ i ].height = HEIGHT;
   }
 
-  for( let i = 0; i < RES_SE.length; i++){
+  for( let i = 0; i < RES_SE.length; i++ ){
     gSE[ i ] = new Audio();
     gSE[ i ].volume = 0.1;
-    gSE[ i ].src = RES_SE[ i ];;
+    gSE[ i ].src = RES_SE[ i ];
   }
-
   
   gImg = new Image();
   gImg.src = RES_IMG;
-  gImg.onload = function()
-  {
-    requestAnimationFrame( onPaint );
-  }
+  gImg.onload = load;
 }
 
 // 描画イベント
@@ -455,6 +487,7 @@ function onPaint()
     tick();
     draw();
   }
+  
   requestAnimationFrame( onPaint );
 }
 
